@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nihongo Benkyou</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="mark" href="#today" data-go="today" aria-label="Nihongo Benkyou, home">
+        <span lang="ja">日本語勉強</span>
+      </a>
+      <div class="chips" aria-label="Your stats">
+        <span class="chip" id="chip-streak"></span>
+        <span class="chip" id="chip-xp"></span>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Main">
+      <a href="#today" data-go="today" data-tab="today">Today</a>
+      <a href="#path" data-go="path" data-tab="path">Path</a>
+      <a href="#progress" data-go="progress" data-tab="progress">Progress</a>
+    </nav>
+  </header>
+  <p class="notice" id="notice" hidden>Progress is not being saved in this view. Use Copy backup on the Progress tab before you leave.</p>
+  <main id="app" tabindex="-1"></main>
+
+  <script src="data/units.js"></script>
+  <script src="js/srs.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/romaji.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
