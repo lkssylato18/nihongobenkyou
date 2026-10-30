@@ -3,7 +3,7 @@
 (function () {
   "use strict";
 
-  var S = window.NBStore, MODS = window.NB_MODULES || [];
+  var S = window.NBStore, R = window.NBRomaji, MODS = window.NB_MODULES || [];
   var state = S.state();
   var app = document.getElementById("app");
   var run = null; // the practice run in progress
@@ -23,7 +23,7 @@
   function find(id) { return MODS.filter(function (m) { return m.id === id; })[0]; }
   function record(id) {
     state.modules = state.modules || {};
-    return state.modules[id] || { best: 0, runs: 0 };
+    return state.modules[id] || { best: 0, runs: 0, tbest: 0, truns: 0 };
   }
 
   // ---------- Module list ----------
@@ -33,7 +33,8 @@
     MODS.forEach(function (m) {
       var r = record(m.id);
       html += '<li class="card unit"><div><h3>' + esc(m.title) + ' <span lang="ja" class="muted small">' + esc(m.jp) + '</span></h3><p class="muted small">' + esc(m.blurb) + "</p>" +
-        (r.runs ? '<p class="small">Best score: <b>' + r.best + " of " + m.practice.length + "</b></p>" : "") + "</div>" +
+        (r.runs ? '<p class="small">Best score: <b>' + r.best + " of " + m.practice.length + "</b></p>" : "") +
+        (r.truns ? '<p class="small">Best translation score: <b>' + r.tbest + " of " + m.translate.length + "</b></p>" : "") + "</div>" +
         '<div class="row"><a class="btn primary small" href="#module/' + m.id + '">' + (r.runs ? "Open" : "Start") + "</a></div></li>";
     });
     html += "</ul>";
@@ -63,15 +64,18 @@
       }
       html += "</section>";
     });
-    html += '<div class="row"><button class="btn primary" id="practice">Practise (' + m.practice.length + " questions)</button></div>";
+    html += '<div class="row"><button class="btn primary" id="practice">Practise (' + m.practice.length + " questions)</button>" +
+      (m.translate ? '<button class="btn" id="translate">Translation quiz (type it)</button>' : "") + "</div>";
     app.innerHTML = html;
     window.scrollTo(0, 0);
     document.getElementById("practice").addEventListener("click", function () { startPractice(m); });
+    var tb = document.getElementById("translate");
+    if (tb) tb.addEventListener("click", function () { startTranslate(m); });
   }
 
   // ---------- Practice ----------
   function startPractice(m) {
-    run = { m: m, qs: shuffle(m.practice.slice()), i: 0, right: 0, shown: false };
+    run = { kind: "mc", m: m, qs: shuffle(m.practice.slice()), i: 0, right: 0, shown: false };
     renderQuestion();
   }
 
@@ -117,16 +121,72 @@
 
   function advance() {
     run.i++;
-    if (run.i < run.qs.length) renderQuestion();
+    if (run.i < run.qs.length) (run.kind === "type" ? renderTypeQuestion : renderQuestion)();
     else renderResult();
+  }
+
+  // ---------- Translation quiz (type the Japanese) ----------
+  function startTranslate(m) {
+    run = { kind: "type", m: m, qs: shuffle(m.translate.slice()), i: 0, right: 0, shown: false };
+    renderTypeQuestion();
+  }
+
+  // Make typed text comparable: kanji to kana, romaji to kana, no spaces or punctuation,
+  // and an opening わたしは / わたしに removed because Japanese often leaves it out.
+  function clean(text, kanjiMap) {
+    var t = String(text);
+    Object.keys(kanjiMap || {}).forEach(function (k) { t = t.split(k).join(kanjiMap[k]); });
+    t = R.normalize(t).replace(/[。、．，.,!?！？「」\s]/g, "");
+    return t.replace(/^わたしは/, "").replace(/わたしに/, "");
+  }
+  function isRight(q, m, given) {
+    var g = clean(given, m.kanjiMap);
+    return q.answers.some(function (a) { return clean(a, m.kanjiMap) === g; });
+  }
+
+  function renderTypeQuestion() {
+    var q = run.qs[run.i];
+    run.shown = false;
+    var pct = Math.round((run.i / run.qs.length) * 100);
+    app.innerHTML =
+      '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
+      '<p class="muted small">Question ' + (run.i + 1) + " of " + run.qs.length + "</p>" +
+      '<section class="card q"><p class="prompt text" lang="en">' + esc(q.en) + "</p>" +
+      '<p class="sub">Type it in Japanese. Hiragana or romaji both work.</p>' +
+      '<form class="answer-row" id="tform" autocomplete="off"><label for="ans" style="position:absolute;left:-9999px">Your Japanese sentence</label>' +
+      '<input id="ans" type="text" lang="ja" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. watashi wa tomodachi ni ...">' +
+      '<div class="preview" id="prev" lang="ja" aria-hidden="true"></div>' +
+      '<div class="row"><button class="btn primary" type="submit">Check</button></div></form><div id="fb" aria-live="polite"></div></section>';
+    window.scrollTo(0, 0);
+    var input = document.getElementById("ans"), prev = document.getElementById("prev");
+    input.addEventListener("input", function () { prev.textContent = R.toKana(input.value, false); });
+    document.getElementById("tform").addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (run.shown || !input.value.trim()) return;
+      run.shown = true;
+      input.disabled = true;
+      var ok = isRight(q, run.m, input.value);
+      if (ok) run.right++;
+      var last = run.i === run.qs.length - 1;
+      document.getElementById("fb").innerHTML =
+        '<div class="feedback ' + (ok ? "right" : "wrong") + '"><strong>' + (ok ? "Correct." : "Not quite.") + "</strong>" +
+        '<span class="detail" lang="ja">' + esc(q.model) + '</span><span class="detail">' + esc(q.why) + "</span>" +
+        (ok ? "" : '<span class="detail small">You typed: ' + esc(R.toKana(input.value, true)) + "</span>") + "</div>" +
+        '<div class="row end" style="margin-top:10px"><button class="btn primary" id="next" type="button">' + (last ? "Finish" : "Next") + "</button></div>";
+      var next = document.getElementById("next");
+      next.addEventListener("click", advance);
+      next.focus();
+    });
+    input.focus();
   }
 
   function renderResult() {
     var m = run.m, right = run.right, total = run.qs.length;
     var rec = record(m.id);
-    var xp = right * 5;
-    rec.best = Math.max(rec.best, right);
-    rec.runs += 1;
+    var typed = run.kind === "type";
+    var xp = right * (typed ? 8 : 5);
+    if (typed) { rec.tbest = Math.max(rec.tbest, right); rec.truns += 1; }
+    else { rec.best = Math.max(rec.best, right); rec.runs += 1; }
     state.modules[m.id] = rec;
     state.xp += xp;
     var t = S.today();
@@ -135,16 +195,18 @@
     if (window.NBRefresh) window.NBRefresh();
     run = null;
     app.innerHTML =
-      '<section class="card"><h2>Practice complete</h2><p class="big">' + right + " / " + total + "</p>" +
-      '<p class="muted small">+' + xp + " XP. Best score: " + rec.best + " of " + total + ".</p>" +
+      '<section class="card"><h2>' + (typed ? "Translation quiz complete" : "Practice complete") + "</h2><p class=\"big\">" + right + " / " + total + "</p>" +
+      '<p class="muted small">+' + xp + " XP. Best score: " + (typed ? rec.tbest : rec.best) + " of " + total + ".</p>" +
       '<p class="small">' + (right === total ? "Perfect. The inside and outside idea is clicking." : "Read the lesson again, then try once more. Ask yourself first: who is receiving?") + "</p>" +
-      '<div class="row"><a class="btn primary" href="#module/' + m.id + '">Back to lesson</a><a class="btn" href="#modules">All modules</a></div></section>';
+      '<div class="row"><button class="btn primary" id="to-lesson">Back to lesson</button><a class="btn" href="#modules">All modules</a></div></section>';
+    // A plain link would do nothing here, because the address already points at this lesson.
+    document.getElementById("to-lesson").addEventListener("click", function () { renderLesson(m); });
   }
 
   document.addEventListener("keydown", function (e) {
     if (!run) return;
     if (e.key === "Enter" && run.shown) { e.preventDefault(); advance(); return; }
-    if (!run.shown && /^[1-4]$/.test(e.key)) {
+    if (run.kind === "mc" && !run.shown && /^[1-4]$/.test(e.key)) {
       var i = Number(e.key) - 1;
       if (i < run.opts.length) choose(i);
     }

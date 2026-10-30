@@ -154,6 +154,76 @@ window.NB_MODULES = [
         answer: "くれました",
         why: "The receiver is the listener, and the speaker asks about the giver (だれが) with the inward verb: くれる."
       }
+    ],
+    // Translation quiz: type the Japanese. Answers are kana (any romaji or kana typing works).
+    // "answers" lists every accepted version, "model" is the sentence shown afterwards.
+    // Leading わたしは / わたしに are optional, since Japanese often drops them.
+    kanjiMap: {
+      "私": "わたし", "友達": "ともだち", "母": "はは", "父": "ちち", "先生": "せんせい",
+      "本": "ほん", "花": "はな", "昨日": "きのう", "誰": "だれ", "貴方": "あなた",
+      "田中": "たなか", "山田": "やまだ", "手紙": "てがみ"
+    },
+    translate: [
+      {
+        en: "I gave my friend a present.",
+        answers: ["わたしはともだちにプレゼントをあげました"],
+        model: "わたしは ともだちに プレゼントを あげました。",
+        why: "I give away from me: あげる. The receiver takes に."
+      },
+      {
+        en: "My friend gave me a present.",
+        answers: ["ともだちがわたしにプレゼントをくれました", "ともだちがプレゼントをくれました"],
+        model: "ともだちが わたしに プレゼントを くれました。",
+        why: "Toward me: くれる. The giver takes が. わたしに can be dropped."
+      },
+      {
+        en: "I received a present from my friend.",
+        answers: ["わたしはともだちにプレゼントをもらいました", "わたしはともだちからプレゼントをもらいました"],
+        model: "わたしは ともだちに プレゼントを もらいました。",
+        why: "I am the receiver: もらう. The giver takes に or から."
+      },
+      {
+        en: "I gave my mother flowers.",
+        answers: ["わたしはははにはなをあげました"],
+        model: "わたしは 母に 花を あげました。",
+        why: "I am the giver and 母 receives: あげる."
+      },
+      {
+        en: "My father gave me money.",
+        answers: ["ちちがわたしにおかねをくれました", "ちちがおかねをくれました"],
+        model: "父が わたしに おかねを くれました。",
+        why: "Someone gives to me: くれる."
+      },
+      {
+        en: "I received a book from the teacher.",
+        answers: ["わたしはせんせいにほんをもらいました", "わたしはせんせいからほんをもらいました"],
+        model: "わたしは 先生に 本を もらいました。",
+        why: "I am the receiver: もらう, with the teacher marked by に or から."
+      },
+      {
+        en: "Tanaka gave a book to Yamada.",
+        answers: ["たなかさんはやまださんにほんをあげました"],
+        model: "たなかさんは やまださんに 本を あげました。",
+        why: "Two outsiders, so the neutral あげる."
+      },
+      {
+        en: "Who gave you this?",
+        answers: ["だれがあなたにこれをくれましたか", "だれがこれをくれましたか"],
+        model: "だれが あなたに これを くれましたか。",
+        why: "Giving toward the listener: くれる, with だれが for the giver."
+      },
+      {
+        en: "I gave my friend a letter yesterday.",
+        answers: ["わたしはきのうともだちにてがみをあげました", "わたしはともだちにきのうてがみをあげました"],
+        model: "わたしは きのう ともだちに 手紙を あげました。",
+        why: "Time words like きのう can sit before or after the receiver."
+      },
+      {
+        en: "I received money from my father.",
+        answers: ["わたしはちちにおかねをもらいました", "わたしはちちからおかねをもらいました"],
+        model: "わたしは 父に おかねを もらいました。",
+        why: "Receiving: もらう. The giver is 父, marked with に or から."
+      }
     ]
   }
 ];
