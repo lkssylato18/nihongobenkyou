@@ -179,3 +179,12 @@ textarea { width: 100%; min-height: 84px; padding: 10px; border-radius: 10px; bo
 @media (prefers-reduced-motion: reduce) {
   .progress > i { transition: none; }
 }
+
+/* Modules */
+.rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.verbcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.verbcard .vhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.verbcard .vword { font-family: var(--display); font-size: 28px; font-weight: 700; }
+.verbcard .dir { color: var(--accent); font-weight: 700; font-size: 15px; }
+.verbcard .pattern { background: var(--paper); border-radius: 8px; padding: 8px 10px; font-size: 16px; }
+.verbcard .ex { font-family: var(--display); font-size: 19px; font-weight: 700; }

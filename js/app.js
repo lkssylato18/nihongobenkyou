@@ -392,15 +392,27 @@
   }
 
   // ---------- Routing ----------
-  var routes = { today: renderToday, path: renderPath, progress: renderProgress };
+  var routes = {
+    today: renderToday, path: renderPath, progress: renderProgress,
+    modules: function () { window.NBModules.renderList(); }
+  };
   function route() {
-    var name = (location.hash || "#today").slice(1);
-    if (!routes[name]) name = "today";
+    var hash = (location.hash || "#today").slice(1);
+    var parts = hash.split("/");
+    var name = parts[0];
+    if (!routes[name] && name !== "module") name = "today";
     sess = null;
-    updateChrome(name);
-    routes[name]();
+    window.NBModules.stop();
+    if (name === "module") {
+      updateChrome("modules");
+      window.NBModules.renderLesson(parts[1]);
+    } else {
+      updateChrome(name);
+      routes[name]();
+    }
     window.scrollTo(0, 0);
   }
+  window.NBRefresh = function () { updateChrome("modules"); };
   function go(name) {
     if (location.hash === "#" + name) route();
     else location.hash = name;
