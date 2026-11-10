@@ -14,16 +14,16 @@
   var TE = { "う": ["って", "った"], "つ": ["って", "った"], "る": ["って", "った"], "む": ["んで", "んだ"], "ぶ": ["んで", "んだ"], "ぬ": ["んで", "んだ"], "く": ["いて", "いた"], "ぐ": ["いで", "いだ"], "す": ["して", "した"] };
 
   var VERB_FORMS = [
-    { key: "masu", label: "Polite (ます)" },
-    { key: "nai", label: "Negative (ない)" },
-    { key: "te", label: "て-form" },
-    { key: "ta", label: "Past (た)" },
-    { key: "pot", label: "Can do (potential)" },
-    { key: "vol", label: "Let's… (volitional)" }
+    { key: "masu", label: "Polite (ます)", short: "〜ます", note: "polite" },
+    { key: "nai", label: "Negative (ない)", short: "〜ない", note: "negative" },
+    { key: "te", label: "て-form", short: "〜て", note: "て-form" },
+    { key: "ta", label: "Past (た)", short: "〜た", note: "past" },
+    { key: "pot", label: "Can do (potential)", short: "can do", note: "potential" },
+    { key: "vol", label: "Let's… (volitional)", short: "let's…", note: "volitional" }
   ];
   var ADJ_FORMS = {
-    i: [{ key: "neg", label: "Negative (くない)" }, { key: "past", label: "Past (かった)" }, { key: "te", label: "て-form (くて)" }, { key: "adv", label: "Adverb (く)" }],
-    na: [{ key: "attr", label: "Before a noun (な)" }, { key: "adv", label: "Adverb (に)" }, { key: "neg", label: "Negative (じゃない)" }, { key: "past", label: "Past (だった)" }]
+    i: [{ key: "neg", label: "Negative (くない)", short: "〜くない", note: "negative" }, { key: "past", label: "Past (かった)", short: "〜かった", note: "past" }, { key: "te", label: "て-form (くて)", short: "〜くて", note: "て-form" }, { key: "adv", label: "Adverb (く)", short: "〜く", note: "adverb" }],
+    na: [{ key: "attr", label: "Before a noun (な)", short: "〜な", note: "before a noun" }, { key: "adv", label: "Adverb (に)", short: "〜に", note: "adverb" }, { key: "neg", label: "Negative (じゃない)", short: "〜じゃない", note: "negative" }, { key: "past", label: "Past (だった)", short: "〜だった", note: "past" }]
   };
 
   function base(cls) { return cls.charAt(0); }
@@ -66,7 +66,7 @@
     var out = [];
     VERB_FORMS.forEach(function (f) {
       if ((f.key === "pot" || f.key === "vol") && hasNoPot(w.cls)) return;
-      out.push({ key: f.key, label: f.label, jp: verbForm(w.jp, w.cls, f.key, false), kana: verbForm(w.kana, w.cls, f.key, true) });
+      out.push({ key: f.key, label: f.label, short: f.short, note: f.note, jp: verbForm(w.jp, w.cls, f.key, false), kana: verbForm(w.kana, w.cls, f.key, true) });
     });
     return out;
   }
@@ -82,7 +82,7 @@
   function adjForms(w) {
     var list = ADJ_FORMS[w.cls === "na" ? "na" : "i"];
     return list.map(function (f) {
-      return { key: f.key, label: f.label, jp: adjForm(w.jp, w.cls, f.key, false), kana: adjForm(w.kana, w.cls, f.key, true) };
+      return { key: f.key, label: f.label, short: f.short, note: f.note, jp: adjForm(w.jp, w.cls, f.key, false), kana: adjForm(w.kana, w.cls, f.key, true) };
     });
   }
 

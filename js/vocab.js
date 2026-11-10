@@ -222,12 +222,12 @@
 
   // Verb forms a translation question can ask for.
   var TRANS_FORMS = [
-    { key: "masu", label: "polite form (〜ます)" },
-    { key: "masen", label: "polite negative (〜ません)" },
-    { key: "mashita", label: "polite past (〜ました)" },
-    { key: "nai", label: "plain negative (〜ない)" },
-    { key: "ta", label: "plain past (〜た)" },
-    { key: "dict", label: "dictionary form (plain)" }
+    { key: "masu", short: "〜ます", note: "polite" },
+    { key: "masen", short: "〜ません", note: "polite negative" },
+    { key: "mashita", short: "〜ました", note: "polite past" },
+    { key: "nai", short: "〜ない", note: "plain negative" },
+    { key: "ta", short: "〜た", note: "plain past" },
+    { key: "dict", short: "dictionary", note: "plain form" }
   ];
   function verbIn(v, key, kana) {
     var str = kana ? v.kana : v.jp;
@@ -253,7 +253,7 @@
     jp2en: function (w) {
       var keys = senseKeys(w.en);
       return {
-        kind: "type", english: true, prompt: w.jp, plang: "ja", sub: "Type the English meaning.", ans: w.en, fb: detail(w),
+        kind: "type", type: "jp2en", dir: ["jp", "en"], english: true, prompt: w.jp, plang: "ja", ans: w.en, fb: detail(w),
         accept: function (s) { return keys.indexOf(cleanEn(s)) > -1; }
       };
     },
@@ -267,7 +267,7 @@
         });
       }
       return {
-        kind: "type", prompt: w.en, plang: "en", sub: "Type it in Japanese (kanji, hiragana or romaji).", ans: w.jp, fb: detail(w),
+        kind: "type", type: "en2jp", dir: ["en", "jp"], prompt: w.en, plang: "en", ans: w.jp, fb: detail(w),
         accept: function (s) { return japaneseMatch(s, ok); }
       };
     },
@@ -275,8 +275,8 @@
     form: function (w) {
       var f = pick(C.forms(w));
       return {
-        kind: "type", prompt: w.jp, plang: "ja", ans: f.jp, fb: f.jp + (f.jp !== f.kana ? " (" + f.kana + ")" : "") + " — " + f.label + " of " + w.jp,
-        sub: "Write the “" + f.label + "” form in Japanese (kanji, hiragana or romaji). Meaning: " + w.en + ".",
+        kind: "type", type: "form", formKey: f.key, form: { from: "dictionary", short: f.short, note: f.note },
+        prompt: w.jp, plang: "ja", ans: f.jp, fb: f.jp + (f.jp !== f.kana ? " (" + f.kana + ")" : "") + " — " + f.label + " of " + w.jp,
         accept: function (s) { return japaneseMatch(s, [{ jp: f.jp, kana: f.kana }]); }
       };
     },
@@ -294,8 +294,8 @@
       if (t.p === "は") alts.push({ jp: "", kana: cs.kana + "わ" + vk });
       if (t.p === "を" && t.v.cls.charAt(0) === "s") alts.push({ jp: cs.jp + vj, kana: cs.kana + vk });
       return {
-        kind: "type", prompt: t.en, plang: "en", ans: jp, fb: jp + " (" + kana + ")",
-        sub: "Write it in Japanese (kanji, hiragana or romaji). Put the verb in the " + f.label + ". Include the particle.",
+        kind: "type", type: "trans", formKey: f.key, dir: ["en", "jp"], form: { from: "verb", short: f.short, note: f.note },
+        prompt: t.en, plang: "en", ans: jp, fb: jp + " (" + kana + ")",
         accept: function (s) { return japaneseMatch(s, alts); }
       };
     }
@@ -321,6 +321,30 @@
     var kind = kinds.length ? pick(kinds) : "jp2en";
     sess.last[w.id] = kind;
     return BUILD[kind](w);
+  }
+
+  // ---------- Question widgets ----------
+  // A row of big chips tells you what to do: the question type, which way to translate, and the form to use.
+  var TAGS = {
+    jp2en: ["意", "MEANING", "meaning"], en2jp: ["あ", "JAPANESE", "japanese"],
+    form: ["形", "FORM", "form"], trans: ["文", "PHRASE", "phrase"]
+  };
+  var LANG = { jp: ["日", "日本語"], en: ["A", "English"] };
+
+  function widgetsHTML(q) {
+    var t = TAGS[q.type];
+    var h = '<div class="qbar" role="group" aria-label="What to do">' +
+      '<span class="qtag t-' + t[2] + '"><b aria-hidden="true">' + t[0] + "</b>" + t[1] + "</span>";
+    if (q.dir) {
+      var a = LANG[q.dir[0]], b = LANG[q.dir[1]];
+      h += '<span class="dchip"><span class="lang"><b aria-hidden="true">' + a[0] + "</b>" + a[1] + '</span><span class="arrow" aria-hidden="true">→</span>' +
+        '<span class="lang to"><b aria-hidden="true">' + b[0] + "</b>" + b[1] + "</span></span>";
+    }
+    if (q.form) {
+      h += '<span class="fchip"><span class="lang">' + esc(q.form.from) + '</span><span class="arrow" aria-hidden="true">→</span>' +
+        '<span class="lang to">' + esc(q.form.short) + "<small>" + esc(q.form.note) + "</small></span></span>";
+    }
+    return h + "</div>";
   }
 
   // ---------- Review sessions ----------
@@ -376,8 +400,9 @@
     app.innerHTML =
       '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
       '<p class="muted small">' + label + " · question " + (sess.i + 1) + " of " + sess.plan.length + "</p>" +
-      '<section class="card q" id="vq"><p class="prompt' + big + (q.plang === "en" ? " text" : "") + '" lang="' + q.plang + '">' + esc(q.prompt) + "</p>" +
-      '<p class="sub">' + esc(q.sub) + "</p>" + body + '<div id="fb" aria-live="polite"></div></section>';
+      '<section class="card q" id="vq" data-type="' + q.type + '"' + (q.formKey ? ' data-form="' + q.formKey + '"' : "") + ">" + widgetsHTML(q) +
+      '<p class="prompt' + big + (q.plang === "en" ? " text" : "") + '" lang="' + q.plang + '">' + esc(q.prompt) + "</p>" +
+      body + '<div id="fb" aria-live="polite"></div></section>';
     window.scrollTo(0, 0);
 
     var input = document.getElementById("ans"), prev = document.getElementById("prev");
