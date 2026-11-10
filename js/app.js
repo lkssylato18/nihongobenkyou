@@ -1,4 +1,4 @@
-// App screens: Today, Path, Progress, plus the learn and review flows.
+// App screens: Today, Path, Progress (the Vocab tab lives in vocab.js), plus the learn and review flows.
 (function () {
   "use strict";
 
@@ -392,7 +392,8 @@
   }
 
   // ---------- Routing ----------
-  var routes = { today: renderToday, path: renderPath, progress: renderProgress };
+  function renderVocab() { window.NBVocab.render(app, { updateChrome: updateChrome, speaker: SPEAKER }); }
+  var routes = { today: renderToday, path: renderPath, vocab: renderVocab, progress: renderProgress };
   function route() {
     var name = (location.hash || "#today").slice(1);
     if (!routes[name]) name = "today";

@@ -7,8 +7,8 @@
   var persistent = true;
 
   function fresh() {
-    // items: id -> {box, due, right, wrong}; units: id -> day started; days: days studied
-    return { v: 1, items: {}, units: {}, xp: 0, days: [], shift: 0 };
+    // items: id -> {box, due, right, wrong}; units: id -> day started; days: days studied; vocab: progress on the Vocab tab (seen words, review boxes, stage scores)
+    return { v: 1, items: {}, units: {}, xp: 0, days: [], shift: 0, vocab: { seen: {}, items: {}, stages: {} } };
   }
 
   function state() {
@@ -20,6 +20,7 @@
       persistent = false;
     }
     if (!mem || mem.v !== 1) mem = fresh();
+    if (!mem.vocab) mem.vocab = fresh().vocab; // saves from before the Vocab tab
     try {
       localStorage.setItem(KEY + ".probe", "1");
       localStorage.removeItem(KEY + ".probe");
@@ -61,6 +62,7 @@
     var s = state();
     Object.keys(s).forEach(function (k) { delete s[k]; });
     Object.assign(s, fresh(), data);
+    if (!s.vocab) s.vocab = fresh().vocab;
     save();
     return "";
   }
