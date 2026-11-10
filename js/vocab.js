@@ -1,6 +1,8 @@
 // Vocab tab: one queue of 1,000 words (100 verbs and the words that connect to them).
 // Flow per stage: learn the new words, then a 20-question review. 80% unlocks the next stage.
-// Harder questions ask you to translate a whole phrase ("to eat meat") into Japanese with the verb in a named form.
+// Every question is typed. Early reviews show the Japanese and ask for the English; later ones show the English and ask
+// for the Japanese, then a requested verb form, then a whole phrase ("to eat meat") with the verb in a named form.
+// A wrong answer offers an "I was correct" override.
 // Words already reviewed come back on the spaced-repetition schedule (js/srs.js), mixed into every
 // stage review and available on their own as "Practice due words".
 (function () {
@@ -200,23 +202,22 @@
   }
 
   // ---------- Questions ----------
-  // Distractor labels: other words of the same type, words you have already seen first.
-  function distract(w, labelFn, n, ok) {
-    var target = labelFn(w), seenPool = [], other = [];
-    WORDS.forEach(function (o) {
-      if (o.id === w.id || o.pos !== w.pos || (ok && !ok(o))) return;
-      (isSeen(o) ? seenPool : other).push(o);
-    });
+  // Every question is typed. Japanese prompts show the kanji; the reading only appears after you answer.
+
+  // Normalise English so "To eat", "eat" and "a walk" / "walk" compare equal.
+  function cleanEn(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/^(to )?(an? |the )?/, "").trim();
+  }
+  // Every meaning that counts as right for a word: "to see; to watch" -> ["see", "watch"]. Brackets are optional.
+  function senseKeys(en) {
     var out = [];
-    shuffle(seenPool).concat(shuffle(other)).forEach(function (o) {
-      var lab = labelFn(o);
-      if (out.length < n && lab !== target && out.indexOf(lab) === -1) out.push(lab);
+    en.split(";").forEach(function (part) {
+      [part, part.replace(/\([^)]*\)/g, "")].forEach(function (v) {
+        v = cleanEn(v);
+        if (v && out.indexOf(v) === -1) out.push(v);
+      });
     });
     return out;
-  }
-
-  function mc(prompt, plang, sub, labels, answer, jpOpts, fb) {
-    return { kind: "mc", prompt: prompt, plang: plang, sub: sub, opts: shuffle(labels.slice()), ans: answer, jpOpts: jpOpts, fb: fb };
   }
 
   // Verb forms a translation question can ask for.
@@ -240,34 +241,43 @@
     return w.tr.filter(function (t) { return isSeen(t.c) && isSeen(t.v); });
   }
 
+  // A typed Japanese answer matches if it is the kanji spelling or the reading (kana or romaji).
+  function japaneseMatch(s, list) {
+    var raw = s.replace(/\s+/g, ""), n = R.normalize(s);
+    return list.some(function (x) { return raw === x.jp || n === R.normalize(x.kana); });
+  }
+
+  // q.english = the answer is typed in English (no kana preview). q.ans is shown after answering.
   var BUILD = {
-    mean: function (w) {
-      return mc(w.jp, "ja", "What does this mean?", [w.en].concat(distract(w, function (o) { return o.en; }, 3)), w.en, false, detail(w));
-    },
-    read: function (w) {
-      return mc(w.en, "en", "Which is the hiragana for this?", [w.kana].concat(distract(w, function (o) { return o.kana; }, 3)), w.kana, true, detail(w));
-    },
-    jpmc: function (w) {
-      return mc(w.en, "en", "Which one is it in Japanese?", [w.jp].concat(distract(w, function (o) { return o.jp; }, 3)), w.jp, true, detail(w));
-    },
-    typekana: function (w) {
+    // Japanese shown, type the English.
+    jp2en: function (w) {
+      var keys = senseKeys(w.en);
       return {
-        kind: "type", prompt: w.en, plang: "en", sub: "Type it in hiragana. Romaji works too.", ans: w.kana, fb: detail(w),
-        accept: function (s) { return R.normalize(s) === R.normalize(w.kana) || s.trim() === w.jp; }
+        kind: "type", english: true, prompt: w.jp, plang: "ja", sub: "Type the English meaning.", ans: w.en, fb: detail(w),
+        accept: function (s) { return keys.indexOf(cleanEn(s)) > -1; }
       };
     },
-    typeread: function (w) {
+    // English shown, type the Japanese. A single plain meaning (e.g. "meal") also accepts same-type words that share it.
+    en2jp: function (w) {
+      var ok = [w];
+      if (w.en.indexOf(";") === -1) {
+        var k = senseKeys(w.en);
+        WORDS.forEach(function (o) {
+          if (o !== w && o.pos === w.pos && senseKeys(o.en).some(function (x) { return k.indexOf(x) > -1; })) ok.push(o);
+        });
+      }
       return {
-        kind: "type", prompt: w.jp, plang: "ja", sub: "Type the reading in hiragana. Meaning: " + w.en + ".", ans: w.kana, fb: detail(w),
-        accept: function (s) { return R.normalize(s) === R.normalize(w.kana); }
+        kind: "type", prompt: w.en, plang: "en", sub: "Type it in Japanese (kanji, hiragana or romaji).", ans: w.jp, fb: detail(w),
+        accept: function (s) { return japaneseMatch(s, ok); }
       };
     },
+    // Type a requested form of the word shown.
     form: function (w) {
       var f = pick(C.forms(w));
       return {
-        kind: "type", prompt: w.jp, plang: "ja", ans: f.kana, fb: f.jp + (f.jp !== f.kana ? " (" + f.kana + ")" : "") + " — " + f.label + " of " + w.jp,
-        sub: "Write the “" + f.label + "” form in hiragana. Meaning: " + w.en + ".",
-        accept: function (s) { return R.normalize(s) === R.normalize(f.kana) || s.trim() === f.jp; }
+        kind: "type", prompt: w.jp, plang: "ja", ans: f.jp, fb: f.jp + (f.jp !== f.kana ? " (" + f.kana + ")" : "") + " — " + f.label + " of " + w.jp,
+        sub: "Write the “" + f.label + "” form in Japanese (kanji, hiragana or romaji). Meaning: " + w.en + ".",
+        accept: function (s) { return japaneseMatch(s, [{ jp: f.jp, kana: f.kana }]); }
       };
     },
     // Translate a whole phrase, e.g. "to eat meat" -> にくをたべます. The prompt says which verb form to use.
@@ -276,22 +286,17 @@
       var t = pick(transOptions(w));
       var f = pick(box <= 3 ? [TRANS_FORMS[0]] : TRANS_FORMS);
       var cs = C.phraseSurface(t.c);
-      var jp = cs.jp + t.p + verbIn(t.v, f.key, false), vk = verbIn(t.v, f.key, true);
-      var kana = cs.kana + t.p + vk;
+      var vj = verbIn(t.v, f.key, false), vk = verbIn(t.v, f.key, true);
+      var jp = cs.jp + t.p + vj, kana = cs.kana + t.p + vk;
       // Also accept the particle spelled the way it sounds (を typed as o, は as wa), and する phrases without を.
-      var alts = [kana];
-      if (t.p === "を") alts.push(cs.kana + "お" + vk);
-      if (t.p === "は") alts.push(cs.kana + "わ" + vk);
-      if (t.p === "を" && t.v.cls.charAt(0) === "s") alts.push(cs.kana + vk);
-      var jps = [jp];
-      if (t.p === "を" && t.v.cls.charAt(0) === "s") jps.push(cs.jp + verbIn(t.v, f.key, false));
+      var alts = [{ jp: jp, kana: kana }];
+      if (t.p === "を") alts.push({ jp: "", kana: cs.kana + "お" + vk });
+      if (t.p === "は") alts.push({ jp: "", kana: cs.kana + "わ" + vk });
+      if (t.p === "を" && t.v.cls.charAt(0) === "s") alts.push({ jp: cs.jp + vj, kana: cs.kana + vk });
       return {
-        kind: "type", prompt: t.en, plang: "en", ans: kana, fb: jp + " (" + kana + ")",
-        sub: "Write it in Japanese, in hiragana (romaji works). Put the verb in the " + f.label + ". Include the particle.",
-        accept: function (s) {
-          var raw = s.replace(/\s+/g, ""), n = R.normalize(s);
-          return jps.indexOf(raw) > -1 || alts.some(function (a) { return R.normalize(a) === n; });
-        }
+        kind: "type", prompt: t.en, plang: "en", ans: jp, fb: jp + " (" + kana + ")",
+        sub: "Write it in Japanese (kanji, hiragana or romaji). Put the verb in the " + f.label + ". Include the particle.",
+        accept: function (s) { return japaneseMatch(s, alts); }
       };
     }
   };
@@ -299,7 +304,6 @@
   function available(w, kind) {
     if (kind === "form") return C.forms(w).length > 0;
     if (kind === "trans") return transOptions(w).length > 0;
-    if (kind === "typeread") return w.jp !== w.kana;
     return true;
   }
 
@@ -307,15 +311,14 @@
   function makeQuestion(w) {
     var box = rec(w) ? rec(w).box : 0;
     var kinds =
-      box <= 0 ? ["mean", "read"] :
-      box === 1 ? ["mean", "read", "jpmc"] :
-      box === 2 ? ["typekana", "jpmc", "typeread"] :
-      box === 3 ? ["typekana", "typeread", "form", "trans", "trans"] :
-                  ["trans", "trans", "form", "typeread", "typekana"];
+      box <= 1 ? ["jp2en"] :
+      box === 2 ? ["en2jp", "en2jp", "jp2en"] :
+      box === 3 ? ["en2jp", "form", "trans"] :
+                  ["trans", "trans", "form", "en2jp"];
     kinds = kinds.filter(function (k) { return available(w, k); });
     var fresh = kinds.filter(function (k) { return k !== sess.last[w.id]; });
     if (fresh.length) kinds = fresh;
-    var kind = kinds.length ? pick(kinds) : "mean";
+    var kind = kinds.length ? pick(kinds) : "jp2en";
     sess.last[w.id] = kind;
     return BUILD[kind](w);
   }
@@ -355,7 +358,7 @@
   }
 
   function runSession(plan, meta) {
-    sess = { plan: plan, i: 0, correct: 0, meta: meta, first: {}, last: {}, missed: [], xp: 0, q: null, answered: false };
+    sess = { plan: plan, i: 0, meta: meta, first: {}, last: {}, results: [], xp: 0, q: null, answered: false };
     showQuestion();
   }
 
@@ -365,17 +368,10 @@
     sess.answered = false;
     var pct = Math.round((sess.i / sess.plan.length) * 100);
     var big = q.prompt.length > 6 ? " sentence" : "";
-    var body;
-    if (q.kind === "mc") {
-      body = '<div class="opts" role="group" aria-label="Answers">' + q.opts.map(function (o, i) {
-        return '<button class="opt' + (q.jpOpts ? " jp" : "") + '" data-i="' + i + '"' + (q.jpOpts ? ' lang="ja"' : "") + '><span class="n">' + (i + 1) + "</span>" + esc(o) + "</button>";
-      }).join("") + "</div>";
-    } else {
-      body = '<form class="answer-row" id="tform" autocomplete="off"><label for="ans" style="position:absolute;left:-9999px">Your answer</label>' +
-        '<input id="ans" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. taberu or たべる">' +
-        '<div class="preview" id="prev" lang="ja" aria-hidden="true"></div>' +
-        '<div class="row"><button class="btn primary" type="submit">Check</button></div></form>';
-    }
+    var body = '<form class="answer-row" id="tform" autocomplete="off"><label for="ans" style="position:absolute;left:-9999px">Your answer</label>' +
+      '<input id="ans" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="' + (q.english ? "Type the English meaning" : "e.g. taberu, たべる or 食べる") + '">' +
+      (q.english ? "" : '<div class="preview" id="prev" lang="ja" aria-hidden="true"></div>') +
+      '<div class="row"><button class="btn primary" type="submit">Check</button></div></form>';
     var label = sess.meta.mode === "stage" ? "Stage " + (sess.meta.si + 1) + " review" : "Practice";
     app.innerHTML =
       '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
@@ -384,52 +380,62 @@
       '<p class="sub">' + esc(q.sub) + "</p>" + body + '<div id="fb" aria-live="polite"></div></section>';
     window.scrollTo(0, 0);
 
-    if (q.kind === "mc") {
-      app.querySelectorAll(".opt").forEach(function (b) {
-        b.addEventListener("click", function () { choose(Number(b.dataset.i)); });
-      });
-    } else {
-      var input = document.getElementById("ans"), prev = document.getElementById("prev");
-      input.addEventListener("input", function () { prev.textContent = R.toKana(input.value, false); });
-      document.getElementById("tform").addEventListener("submit", function (e) {
-        e.preventDefault();
-        if (sess.answered || !input.value.trim()) return;
-        input.disabled = true;
-        answer(q.accept(input.value));
-      });
-      input.focus();
-    }
-  }
-
-  function choose(i) {
-    if (sess.answered) return;
-    var q = sess.q;
-    app.querySelectorAll(".opt").forEach(function (b, idx) {
-      b.disabled = true;
-      if (q.opts[idx] === q.ans) b.classList.add("right");
-      else if (idx === i) b.classList.add("wrong");
+    var input = document.getElementById("ans"), prev = document.getElementById("prev");
+    if (prev) input.addEventListener("input", function () { prev.textContent = R.toKana(input.value, false); });
+    document.getElementById("tform").addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (sess.answered || !input.value.trim()) return;
+      input.disabled = true;
+      answer(q.accept(input.value), input.value.trim());
     });
-    answer(q.opts[i] === q.ans);
+    input.focus();
   }
 
-  function answer(ok) {
+  function answer(ok, typed) {
     sess.answered = true;
     var w = sess.plan[sess.i], q = sess.q, st = S.state();
     // Only the first answer for a word in a session moves it along the review schedule.
-    if (!sess.first[w.id]) { sess.first[w.id] = true; SRS.review(rec(w), ok, S.today()); }
-    if (ok) { sess.correct++; sess.xp += 5; st.xp += 5; }
-    else if (sess.missed.indexOf(w.id) === -1) sess.missed.push(w.id);
+    // The earlier state is kept so "I was correct" can undo a wrong mark.
+    var first = !sess.first[w.id], snap = null;
+    sess.first[w.id] = true;
+    if (first) { snap = JSON.parse(JSON.stringify(rec(w))); SRS.review(rec(w), ok, S.today()); }
+    sess.results[sess.i] = { id: w.id, ok: ok, first: first, snap: snap };
+    if (ok) { sess.xp += 5; st.xp += 5; }
     markStudied(); S.save(); ctx.updateChrome("vocab");
 
     var lastQ = sess.i === sess.plan.length - 1;
     document.getElementById("fb").innerHTML =
-      '<div class="feedback ' + (ok ? "right" : "wrong") + '"><strong>' + (ok ? "Correct." : "Not quite. Answer: " + esc(q.ans)) + "</strong>" +
-      '<span class="detail" lang="ja">' + esc(q.fb) + "</span></div>" +
-      '<div class="row end" style="margin-top:10px">' + speakerBtn(w.kana, "Hear it") +
+      '<div class="feedback ' + (ok ? "right" : "wrong") + '" id="fbbox"><strong id="fbhead">' + (ok ? "Correct." : "Not quite. Answer: " + esc(q.ans)) + "</strong>" +
+      '<span class="detail" lang="ja">' + esc(q.fb) + "</span>" +
+      (ok ? "" : '<span class="detail small" id="fbtyped">You wrote: ' + esc(typed) + "</span>") + "</div>" +
+      '<div class="row" style="margin-top:10px">' +
+      (ok ? "" : '<button class="btn" id="override">I was correct</button>') +
+      '<span class="grow"></span>' + speakerBtn(w.kana, "Hear it") +
       '<button class="btn primary" id="next">' + (lastQ ? "See score" : "Next") + "</button></div>";
+    var ov = document.getElementById("override");
+    if (ov) ov.addEventListener("click", override);
     var next = document.getElementById("next");
     next.addEventListener("click", advance);
     next.focus();
+  }
+
+  // Manual override: the typed answer was fine even though it did not match. Counts as right everywhere.
+  function override() {
+    var res = sess && sess.results[sess.i];
+    if (!res || res.ok) return;
+    var st = S.state(), r = rec(BYID[res.id]);
+    if (res.first) {
+      Object.keys(res.snap).forEach(function (k) { r[k] = res.snap[k]; });
+      SRS.review(r, true, S.today());
+    }
+    res.ok = true; sess.xp += 5; st.xp += 5;
+    S.save(); ctx.updateChrome("vocab");
+    document.getElementById("fbbox").className = "feedback right";
+    document.getElementById("fbhead").textContent = "Marked correct.";
+    var typed = document.getElementById("fbtyped");
+    if (typed) typed.remove();
+    document.getElementById("override").remove();
+    document.getElementById("next").focus();
   }
 
   function advance() {
@@ -439,6 +445,9 @@
 
   function summary() {
     var s = sess; sess = null;
+    s.correct = s.results.filter(function (r) { return r && r.ok; }).length;
+    s.missed = [];
+    s.results.forEach(function (r) { if (r && !r.ok && s.missed.indexOf(r.id) === -1) s.missed.push(r.id); });
     var total = s.plan.length, pct = Math.round((s.correct / total) * 100);
     var ok = s.correct / total >= PASS;
     var html, st = S.state();
@@ -551,11 +560,7 @@
 
   document.addEventListener("keydown", function (e) {
     if (!sess || !document.getElementById("vq")) return;
-    if (e.key === "Enter" && sess.answered) { e.preventDefault(); advance(); return; }
-    if (!sess.answered && sess.q && sess.q.kind === "mc" && /^[1-4]$/.test(e.key)) {
-      var i = Number(e.key) - 1;
-      if (i < sess.q.opts.length) choose(i);
-    }
+    if (e.key === "Enter" && sess.answered) { e.preventDefault(); advance(); }
   });
 
   window.NBVocab = {
